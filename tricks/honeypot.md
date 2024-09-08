@@ -83,4 +83,12 @@ sudo systemctl status setup-macvlans.service
 cat /var/log/setup-macvlans.log
 ```
 
+## Launching CSS326-24G-2S+ honeypot in namespace ns0
 
+```
+ip netns exec ns0 python3 honeypot_CSS326-24G-2S+.py
+```
+
+```
+curl "http://192.168.100.3/index.html"
+```

@@ -6,14 +6,12 @@
 # closely resemble the legitimate Mikrotik login page, but all input is captured and logged for further 
 # investigation without granting any real access to network devices.
 #
+# The script does not fully emulate the device and its services, and may also crash when scanning, 
+# which requires some improvement.
+#
 # Usage:
 # - Deploy the script on a server or device with a web server configured to host the honeypot.
 # - python3 honeypot_CSS326-24G-2S+.py --host 0.0.0.0 --port 80 -o /var/log/honeypot_CSS326-24G-2S+.log
-#
-# Developed by: Defencore
-# Date: 2024-09-08
-# License: GPL
-
 
 import os
 import socket

@@ -1,6 +1,6 @@
 
 ### qemu_openwrt_lab.sh
-[qemu_openwrt_lab.sh](lab_deployment/qemu_openwrt_lab.sh)
+[qemu_openwrt_lab.sh](qemu_openwrt_lab.sh)
 
 This script automates the creation and management of OpenWRT virtual machines (VMs) using QEMU. 
 It sets up VLANs for WAN and LAN traffic, configures network bridges, and handles NAT and DHCP for WAN connectivity.

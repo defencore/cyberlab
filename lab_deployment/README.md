@@ -22,3 +22,4 @@ sudo screen -r openwrt_vm_1
 sudo screen -r openwrt_vm_16
 ./qemu_openwrt_lab.sh stop
 ```
+![image](https://github.com/user-attachments/assets/4c06ca4c-0e0b-4f54-af64-e73fdc835553)

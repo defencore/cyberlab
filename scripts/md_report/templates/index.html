@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Send Report</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <!-- highlight.js -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.7.2/styles/github.min.css">
+    <style>
+        .preview {
+            border: 1px solid #ced4da;
+            padding: 10px;
+            background-color: #f8f9fa;
+            margin-top: 10px;
+            min-height: 200px;
+            overflow-x: auto;
+        }
+        pre code {
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            padding: 10px;
+            display: block;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-x: auto; /* Horizontal scrolling */
+            max-height: 400px; /* Max height for vertical scrolling */
+            overflow-y: auto; /* Vertical scrolling if content exceeds max height */
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center">Markdown Editor</h1>
+
+        <!-- Error message -->
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="alert alert-danger">
+                    {% for message in messages %}
+                        <p>{{ message }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="/">
+            <div class="form-group">
+                <label for="name">Name (only lowercase Latin letters, up to 50 characters):</label>
+                <input type="text" class="form-control" id="name" name="name" value="{{ name }}">
+            </div>
+            <div class="form-group">
+                <label for="markdown_text">Text in Markdown format:</label>
+                <textarea class="form-control" id="markdown_text" name="markdown_text" rows="10">{{ markdown_text }}</textarea>
+            </div>
+            <button type="submit" class="btn btn-primary" name="preview">Preview</button>
+            <button type="submit" class="btn btn-success" name="save">Save</button>
+        </form>
+
+        <h3 class="mt-4">Preview:</h3>
+        <div class="preview">
+            {{ html_preview|safe }}
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <!-- highlight.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.7.2/highlight.min.js"></script>
+    <script>
+        // Initialize code highlighting
+        document.addEventListener('DOMContentLoaded', (event) => {
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightBlock(block);
+            });
+        });
+    </script>
+</body>
+</html>

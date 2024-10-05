@@ -1,6 +1,7 @@
 #!/bin/bash
 
 WRITABLE=0  # 0 = No changes written to disk, 1 = Write allowed
+DEBUG_MODE=${DEBUG_MODE:-0}
 
 OPENWRT_VERSION="23.05.0"
 MIKROTIK_VERSION="6.40"
@@ -18,8 +19,23 @@ VM_DIR="vms"
 # Exit script on any error
 set -e
 
-debug(){
-    echo "Not implemented"
+# Function to enable debug mode
+debug() {
+    if [ "$DEBUG_MODE" -eq 1 ]; then
+        echo "[DEBUG]: $1"
+    fi
+}
+
+print_system_info() {
+    echo "WRITABLE: $WRITABLE"
+    echo "OpenWrt Image: $OPENWRT_QCOW2_IMAGE"
+    echo "MikroTik Image: $MIKROTIK_QCOW2_IMAGE"
+    echo "Physical Interface: $PHY_IF"
+    echo "WAN Bridge: $WAN_BRIDGE"
+    echo "WAN Bridge IP: $BR_WAN_IP"
+    echo "VM IDs: ${VM_IDS[*]}"
+    echo "VM Directory: $VM_DIR"
+    echo ""
 }
 
 init_script() {
@@ -55,15 +71,15 @@ init_script() {
         echo "Creating bridge $WAN_BRIDGE..."
         sudo brctl addbr "$WAN_BRIDGE"
         sudo ip link set dev "$WAN_BRIDGE" up
-        sudo ifconfig "$WAN_BRIDGE" "$BR_WAN_IP"
+        sudo ip addr add "$BR_WAN_IP" dev "$WAN_BRIDGE"
     fi
 
     # Kill any running dnsmasq processes that are bound to the interface or IP
-    # echo "Stopping any existing dnsmasq processes on $WAN_BRIDGE or $DNSMASQ_IP..."
+    debug "Stopping any existing dnsmasq processes on $WAN_BRIDGE or $DNSMASQ_IP..."
     sudo pkill -f "dnsmasq.*--interface=$WAN_BRIDGE" || echo "No existing dnsmasq processes found."
 
     # Start dnsmasq in a new screen session
-    # echo "Starting dnsmasq in a new screen session..."
+    debug "Starting dnsmasq in a new screen session..."
     sudo screen -dmS "dnsmasq" \
         dnsmasq --interface="$WAN_BRIDGE" \
         --bind-interfaces \
@@ -71,7 +87,7 @@ init_script() {
         --dhcp-range="$DHCP_RANGE_START,$DHCP_RANGE_END,12h" \
         --no-daemon
     
-    # echo "Initialization complete."
+    debug "Initialization complete."
 }
 
 # Function to check if necessary tools are installed (like qemu, wget, etc.)
@@ -222,10 +238,13 @@ create_interfaces() {
         echo "Creating interfaces for VM $vm_id..."
 
         # Create network bridges if they don't already exist
+        debug "Creating network bridge br-net-${vm_id}"
         create_bridge "br-net-${vm_id}"
+        debug "Creating network bridge br-lan-${vm_id}"
         create_bridge "br-lan-${vm_id}"
 
         # Create TAP interfaces
+        debug "Creating TAP interfaces for VM $vm_id"
         create_tap_interface "tap-${vm_id}-1-wan"
         create_tap_interface "tap-${vm_id}-1-lan"
         create_tap_interface "tap-${vm_id}-2-wan"
@@ -270,91 +289,42 @@ create_interfaces() {
     fi
 }
 
-# Function to delete interfaces for the specified range of VM IDs
+# Helper function to delete a specified interface if it exists
+delete_if_exists() {
+    local iface_name=$1
+    if ip link show "$iface_name" &> /dev/null; then
+        sudo ip link set "$iface_name" down
+        sudo ip link delete "$iface_name"
+        echo "Deleted interface: $iface_name"
+    fi
+}
+
+# Function to delete interfaces for a specified VM ID
 delete_interfaces() {
-        local vlan_id=$((LAN_VLAN_BASE + $vm_id))
-        local vlan_if="${PHY_IF}.${vlan_id}"
+    local vm_id=$1
+    local vlan_id=$((LAN_VLAN_BASE + $vm_id))
+    local vlan_if="${PHY_IF}.${vlan_id}"
 
-        echo "Deleting interfaces for VM $vm_id..."
+    echo "Deleting interfaces for VM $vm_id..."
 
-        # Check and remove TAP interfaces only if they exist
-        if ip link show "tap-${vm_id}-1-wan" &> /dev/null; then
-            sudo ip link set "tap-${vm_id}-1-wan" down
-            sudo ip link delete "tap-${vm_id}-1-wan"
-        fi
-        if ip link show "tap-${vm_id}-1-lan" &> /dev/null; then
-            sudo ip link set "tap-${vm_id}-1-lan" down
-            sudo ip link delete "tap-${vm_id}-1-lan"
-        fi
-        if ip link show "tap-${vm_id}-2-wan" &> /dev/null; then
-            sudo ip link set "tap-${vm_id}-2-wan" down
-            sudo ip link delete "tap-${vm_id}-2-wan"
-        fi
-        if ip link show "tap-${vm_id}-2-lan" &> /dev/null; then
-            sudo ip link set "tap-${vm_id}-2-lan" down
-            sudo ip link delete "tap-${vm_id}-2-lan"
-        fi
+    # Delete TAP interfaces
+    delete_if_exists "tap-${vm_id}-1-wan"
+    delete_if_exists "tap-${vm_id}-1-lan"
+    delete_if_exists "tap-${vm_id}-2-wan"
+    delete_if_exists "tap-${vm_id}-2-lan"
 
-        # Remove network bridges
-        if ip link show "br-net-${vm_id}" &> /dev/null; then
-            sudo ip link set "br-net-${vm_id}" down
-            sudo brctl delbr "br-net-${vm_id}"
-        fi
-        if ip link show "br-lan-${vm_id}" &> /dev/null; then
-            sudo ip link set "br-lan-${vm_id}" down
-            sudo brctl delbr "br-lan-${vm_id}"
-        fi
+    # Delete network bridges
+    delete_if_exists "br-net-${vm_id}"
+    delete_if_exists "br-lan-${vm_id}"
 
-        # Remove VLAN
-        if ip link show "$vlan_if" &> /dev/null; then
-            sudo ip link set dev "$vlan_if" down
-            sudo ip link delete "$vlan_if"
-            echo "Deleted VLAN: $vlan_if"
-        fi
+    # Delete VLAN
+    delete_if_exists "$vlan_if"
 }
 
 # Function to delete all interfaces for all VMs
 delete_all_interfaces() {
     for vm_id in "${VM_IDS[@]}"; do
-        local vlan_id=$((LAN_VLAN_BASE + $vm_id))
-        local vlan_if="${PHY_IF}.${vlan_id}"
-
-        echo "Deleting interfaces for VM $vm_id..."
-
-        # Check and remove TAP interfaces only if they exist
-        if ip link show "tap-${vm_id}-1-wan" &> /dev/null; then
-            sudo ip link set "tap-${vm_id}-1-wan" down
-            sudo ip link delete "tap-${vm_id}-1-wan"
-        fi
-        if ip link show "tap-${vm_id}-1-lan" &> /dev/null; then
-            sudo ip link set "tap-${vm_id}-1-lan" down
-            sudo ip link delete "tap-${vm_id}-1-lan"
-        fi
-        if ip link show "tap-${vm_id}-2-wan" &> /dev/null; then
-            sudo ip link set "tap-${vm_id}-2-wan" down
-            sudo ip link delete "tap-${vm_id}-2-wan"
-        fi
-        if ip link show "tap-${vm_id}-2-lan" &> /dev/null; then
-            sudo ip link set "tap-${vm_id}-2-lan" down
-            sudo ip link delete "tap-${vm_id}-2-lan"
-        fi
-
-        # Remove network bridges
-        if ip link show "br-net-${vm_id}" &> /dev/null; then
-            sudo ip link set "br-net-${vm_id}" down
-            sudo brctl delbr "br-net-${vm_id}"
-        fi
-        if ip link show "br-lan-${vm_id}" &> /dev/null; then
-            sudo ip link set "br-lan-${vm_id}" down
-            sudo brctl delbr "br-lan-${vm_id}"
-        fi
-
-        # Remove VLAN
-        if ip link show "$vlan_if" &> /dev/null; then
-            sudo ip link set dev "$vlan_if" down
-            sudo ip link delete "$vlan_if"
-            echo "Deleted VLAN: $vlan_if"
-        fi
+        delete_interfaces "$vm_id"
     done
 }
 
@@ -384,7 +354,8 @@ internet_enable() {
     # Allow forwarding between the WAN bridge and the active interface
     sudo iptables -A FORWARD -i "$WAN_BRIDGE" -o "$ACTIVE_IF" -j ACCEPT
     sudo iptables -A FORWARD -i "$ACTIVE_IF" -o "$WAN_BRIDGE" -m state --state RELATED,ESTABLISHED -j ACCEPT
-
+    
+    debug "Internet enabled with NAT on $ACTIVE_IF"
 }
 
 # Function to disable internet access
@@ -472,41 +443,20 @@ start_mikrotik_vm() {
         -nographic
 }
 
+# Helper function to start both OpenWrt and MikroTik VMs for a specific VM ID
+start_vm() {
+    local vm_id=$1
+    create_interfaces "$vm_id"
+    start_openwrt_vm "$vm_id"
+    start_mikrotik_vm "$vm_id"
+}
+
 # Function to start a specific VM by ID (both OpenWrt and MikroTik)
 start_qemu_machine() {
     local valid_ids="${VM_IDS[*]}"  # Store the expanded VM IDs as a string
     read -p "Enter VM ID to start (${valid_ids}): " vm_id
     if is_valid_vm_id "$vm_id"; then
-        create_interfaces "$vm_id"
-        # Start OpenWrt VM
-        start_openwrt_vm "$vm_id"
-        # Start MikroTik VM
-        start_mikrotik_vm "$vm_id"
-    else
-        echo "Invalid VM ID: $vm_id. It must be within the range of ${valid_ids}."
-    fi
-}
-
-# Function to stop a specific VM by ID
-stop_qemu_machine() {
-    local valid_ids="${VM_IDS[*]}"  # Store the expanded VM IDs as a string
-    read -p "Enter VM ID to stop (${valid_ids}): " vm_id
-    if is_valid_vm_id "$vm_id"; then
-        echo "Stopping VM with ID $vm_id..."
-                # Check if the OpenWrt VM screen session exists before trying to stop it
-        if sudo screen -list | grep -q "vm_${vm_id}-1-openwrt"; then
-            sudo screen -S "vm_${vm_id}-1-openwrt" -X quit
-        else
-            echo "No active OpenWrt VM session for VM ID ${vm_id}."
-        fi
-        
-        # Check if the MikroTik VM screen session exists before trying to stop it
-        if sudo screen -list | grep -q "vm_${vm_id}-2-mikrotik"; then
-            sudo screen -S "vm_${vm_id}-2-mikrotik" -X quit
-        else
-            echo "No active MikroTik VM session for VM ID ${vm_id}."
-        fi
-        delete_interfaces "$vm_id"
+        start_vm "$vm_id"
     else
         echo "Invalid VM ID: $vm_id. It must be within the range of ${valid_ids}."
     fi
@@ -515,10 +465,44 @@ stop_qemu_machine() {
 # Function to start all VMs (both OpenWrt and MikroTik)
 start_all_qemu_machines() {
     for vm_id in "${VM_IDS[@]}"; do
-        create_interfaces "$vm_id"
-        start_openwrt_vm "$vm_id"
-        start_mikrotik_vm "$vm_id"
+        start_vm "$vm_id"
     done
+}
+
+# Helper function to stop both OpenWrt and MikroTik VMs for a specific VM ID
+stop_vm() {
+    local vm_id=$1
+
+    # Stop OpenWrt VM if the screen session exists
+    if sudo screen -list | grep -q "vm_${vm_id}-1-openwrt"; then
+        sudo screen -S "vm_${vm_id}-1-openwrt" -X quit
+        echo "Stopped OpenWrt VM session for VM ID ${vm_id}."
+    else
+        echo "No active OpenWrt VM session for VM ID ${vm_id}."
+    fi
+
+    # Stop MikroTik VM if the screen session exists
+    if sudo screen -list | grep -q "vm_${vm_id}-2-mikrotik"; then
+        sudo screen -S "vm_${vm_id}-2-mikrotik" -X quit
+        echo "Stopped MikroTik VM session for VM ID ${vm_id}."
+    else
+        echo "No active MikroTik VM session for VM ID ${vm_id}."
+    fi
+
+    # Delete network interfaces
+    delete_interfaces "$vm_id"
+}
+
+# Function to stop a specific VM by ID
+stop_qemu_machine() {
+    local valid_ids="${VM_IDS[*]}"  # Store the expanded VM IDs as a string
+    read -p "Enter VM ID to stop (${valid_ids}): " vm_id
+    if is_valid_vm_id "$vm_id"; then
+        echo "Stopping VM with ID $vm_id..."
+        stop_vm "$vm_id"
+    else
+        echo "Invalid VM ID: $vm_id. It must be within the range of ${valid_ids}."
+    fi
 }
 
 # Function to stop all VMs
@@ -526,52 +510,72 @@ stop_all_qemu_machines() {
     echo "Stopping all VMs..."
 
     for vm_id in "${VM_IDS[@]}"; do
-        # Check and stop OpenWrt VM if the screen session exists
-        if sudo screen -list | grep -q "vm_${vm_id}-1-openwrt"; then
-            sudo screen -S "vm_${vm_id}-1-openwrt" -X quit
-            echo "Stopped OpenWrt VM session for VM ID ${vm_id}."
-        else
-            echo "No active OpenWrt VM session for VM ID ${vm_id}."
-        fi
-        
-        # Check and stop MikroTik VM if the screen session exists
-        if sudo screen -list | grep -q "vm_${vm_id}-2-mikrotik"; then
-            sudo screen -S "vm_${vm_id}-2-mikrotik" -X quit
-            echo "Stopped MikroTik VM session for VM ID ${vm_id}."
-        else
-            echo "No active MikroTik VM session for VM ID ${vm_id}."
-        fi
+        stop_vm "$vm_id"
     done
 
-    # Delete all network interfaces
+    # Delete all network interfaces and disable internet
     delete_all_interfaces
     internet_disable
 }
 
-# Function to display help menu
+check_service_status() {
+    if sudo screen -list | grep -q "dnsmasq"; then
+        echo "dnsmasq is running."
+    else
+        echo "dnsmasq is not running."
+    fi
+
+    for vm_id in "${VM_IDS[@]}"; do
+        if sudo screen -list | grep -q "vm_${vm_id}"; then
+            echo "VM ${vm_id} is running."
+        else
+            echo "VM ${vm_id} is not running."
+        fi
+    done
+}
+
+# Function to display help menu with description
 display_help() {
+    echo "Script to manage virtual machines (VMs) for OpenWrt and MikroTik environments."
+    echo "You can deploy, start, stop VMs, and manage network interfaces."
+    echo ""
     echo "Usage: $0 [options]"
     echo ""
     echo "Options:"
-    echo "  -d      Enable Debug (not implemented)"
+    echo "  -d      Enable Debug mode (prints additional debug information)"
     echo "  -h      Display this help message"
     echo ""
-    echo "Menu:"
-    echo "  0) Deploy System"
-    echo "  1) Start VM by ID"
-    echo "  2) Stop VM by ID"
-    echo "  3) Start VMs"
-    echo "  4) Stop VMs"
-    echo "  5) Enable Internet"
-    echo "  6) Disable Internet"
-    echo "  q) Quit"
+    echo "Menu Options:"
+    echo "  0) Deploy System        - Download and prepare OpenWrt and MikroTik systems"
+    echo "  1) Start VM by ID       - Start a specific VM (OpenWrt and MikroTik)"
+    echo "  2) Stop VM by ID        - Stop a specific VM (OpenWrt and MikroTik)"
+    echo "  3) Start All VMs        - Start all VMs in the defined range"
+    echo "  4) Stop All VMs         - Stop all VMs in the defined range"
+    echo "  5) Enable Internet      - Enable NAT and forwarding for the network"
+    echo "  6) Disable Internet     - Disable NAT and forwarding for the network"
+    echo "  q) Quit                 - Exit the script"
+    echo ""
+    echo "Examples:"
+    echo "  $0 -h           # Display help"
+    echo "  $0 -d           # Enable debug mode"
+    echo "  $0              # Start the interactive menu"
 }
 
-while getopts "d:h" opt; do
+quit() {
+    if sudo screen -list | grep -q "dnsmasq"; then
+        sudo screen -S "dnsmasq" -X quit
+        echo "Stopped dnsmasq"
+    else
+        echo "No active dnsmasq session"
+    fi
+    delete_if_exists "${WAN_BRIDGE}"
+}
+
+while getopts "dh" opt; do
     case $opt in
         d)
-            debug
-            exit 0
+            DEBUG_MODE=1
+            print_system_info
             ;;
         h)
             display_help
@@ -592,7 +596,10 @@ mkdir -p "${VM_DIR}"
 
 # Menu loop
 while true; do
+    #clear
+    echo "=========================="
     echo "Menu:"
+    echo "=========================="
     echo "0) Deploy System"
     echo "1) Start VM by ID"
     echo "2) Stop VM by ID"
@@ -600,7 +607,9 @@ while true; do
     echo "4) Stop All VMs"
     echo "5) Enable Internet"
     echo "6) Disable Internet"
+    echo "7) Check Service Status"
     echo "q) Quit"
+    echo "=========================="
     
     read -p "Enter your choice: " choice
     case $choice in
@@ -611,7 +620,8 @@ while true; do
         4) stop_all_qemu_machines ;;
         5) internet_enable ;;
         6) internet_disable ;;
-        q) echo "Exiting..."; break ;;
+        7) check_service_status ;;
+        q) echo "Exiting..."; quit; break ;;
         *) echo "Invalid option. Please try again." ;;
     esac
 done

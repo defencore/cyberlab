@@ -1,3 +1,14 @@
+# Logical scheme of instances
+![image](https://github.com/user-attachments/assets/cbf74ca3-5ca3-4907-8a3d-20d6857f7adb)
+
+# Deployment
+## Install dependencies:
+```
+└─$ sudo apt-get update
+└─$ sudo apt-get install screen qemu-system-x86 bridge-utils screen
+```
+
+## Download & Install VM Images
 ```
 ./qemu_openwrt_mikrotik_lab.sh
 ```
@@ -134,3 +145,5 @@ sudo ip netns exec ns9 ip link set tap-9-2-lan netns 1
 sudo ip netns exec ns9 ip link del tap-9-2-lan
 
 ```
+
+

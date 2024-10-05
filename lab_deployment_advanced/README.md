@@ -1,5 +1,5 @@
 # Logical scheme of instances
-![image](https://github.com/user-attachments/assets/cbf74ca3-5ca3-4907-8a3d-20d6857f7adb)
+![image](https://github.com/user-attachments/assets/31ce71ba-8675-457e-8b7f-4745c3d1367f)
 
 # Deployment
 ## Install dependencies:
@@ -27,6 +27,8 @@ Enter your choice:
 
 
 ## Lab Config
+![image](https://github.com/user-attachments/assets/e1c7221d-9bad-440b-aea2-8710523fe018)
+
 ### MikroTik Config
 ```
 [admin@MikroTik] > 
@@ -145,5 +147,7 @@ sudo ip netns exec ns9 ip link set tap-9-2-lan netns 1
 sudo ip netns exec ns9 ip link del tap-9-2-lan
 
 ```
-
+# Script Developent
+## qemu_openwrt_mikrotik_lab.sh
+![image](https://github.com/user-attachments/assets/d8f2fcbd-2238-4c24-be98-79b5438d2dc1)
 

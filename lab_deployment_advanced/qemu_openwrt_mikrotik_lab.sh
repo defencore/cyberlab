@@ -465,9 +465,9 @@ start_mikrotik_vm() {
         -drive file="$vm_image",id=d0,if=none,bus=0,unit=0,snapshot="$SNAPSHOT" \
         -device ide-hd,drive=d0,bus=ide.0 \
         -netdev tap,id=net1_lan,ifname=tap-${vm_id}-2-lan,script=no,downscript=no \
-        -device virtio-net-pci,netdev=net1_lan,id=lan1,mac=$(printf "52:54:00:%02x:02:01" "$vm_id") \
+        -device virtio-net-pci,netdev=net1_lan,id=lan1,mac=$(printf "00:0C:42:%02x:02:01" "$vm_id") \
         -netdev tap,id=net1_wan,ifname=tap-${vm_id}-2-wan,script=no,downscript=no \
-        -device virtio-net-pci,netdev=net1_wan,id=wan1,mac=$(printf "52:54:00:%02x:02:02" "$vm_id") \
+        -device virtio-net-pci,netdev=net1_wan,id=wan1,mac=$(printf "00:0C:42:%02x:02:02" "$vm_id") \
         -enable-kvm \
         -nographic
 }

@@ -1,12 +1,25 @@
 #!/bin/sh
 
-# WireGuard parameters
+# Variables
 VPN_INTERFACE="wg0"
-VPN_ADDRESS="10.0.0.1/24"
 VPN_PORT="51820"
 PEER_ALLOWED_IPS="10.0.0.0/24"  # Allow all clients in the subnet to see each other
+ACCOUNTS_FILE=""
+RECREATE=false
+DELETE=false
 
-# Debug function to log UCI commands
+# Function to display help
+show_help() {
+    echo "Usage: $0 [-a accounts_file] [-r] [-d]"
+    echo ""
+    echo "Options:"
+    echo "  -a  Specify the accounts file (required for adding/creating clients)"
+    echo "  -r  Recreate WireGuard settings"
+    echo "  -d  Delete existing WireGuard settings"
+    exit 1
+}
+
+# Function to run UCI commands
 run_command() {
     echo "Running command: $@"
     "$@"
@@ -15,74 +28,115 @@ run_command() {
     fi
 }
 
-# Get the WAN interface from UCI
+# Parse options
+while getopts "a:rd" opt; do
+    case $opt in
+        a)
+            ACCOUNTS_FILE="$OPTARG"
+            ;;
+        r)
+            RECREATE=true
+            ;;
+        d)
+            DELETE=true
+            ;;
+        *)
+            show_help
+            ;;
+    esac
+done
+
+# Delete WireGuard settings if the -d option is used
+if [ "$DELETE" = true ]; then
+    echo "Deleting existing WireGuard settings..."
+
+    # Find all WireGuard client sections associated with wg0 and delete them
+    for section in $(uci show network | grep "@wireguard_${VPN_INTERFACE}" | cut -d'=' -f1); do
+        echo "Deleting section $section"
+        run_command uci delete "$section"
+    done
+
+    # Delete the main WireGuard interface configuration
+    if uci show network.${VPN_INTERFACE} >/dev/null 2>&1; then
+        echo "Deleting WireGuard interface $VPN_INTERFACE"
+        run_command uci delete network.${VPN_INTERFACE}
+    fi
+
+    # Remove firewall rule for WireGuard if it exists
+    for rule in $(uci show firewall | grep "Allow-WireGuard" | cut -d'=' -f1); do
+        echo "Deleting firewall rule $rule"
+        run_command uci delete "$rule"
+    done
+
+    run_command uci commit network
+    run_command uci commit firewall
+    run_command /etc/init.d/network reload
+    run_command /etc/init.d/firewall reload
+
+    echo "WireGuard settings and clients deleted."
+    exit 0
+fi
+
+# Check if the accounts file is provided when creating or adding clients
+if [ -z "$ACCOUNTS_FILE" ] && [ "$RECREATE" = false ]; then
+    echo "Error: accounts file is required for adding or creating new clients."
+    show_help
+fi
+
+# Get WAN interface and IP
 WAN_INTERFACE=$(uci get network.wan.device 2>/dev/null)
-echo "WAN interface: $WAN_INTERFACE"
-
-# Retrieve the WAN IP address dynamically from the system (since it's assigned via DHCP)
 WAN_IP=$(ip -4 addr show $WAN_INTERFACE | grep inet | awk '{print $2}' | cut -d'/' -f1)
-echo "WAN IP: $WAN_IP"
 
-# Check if WAN interface and IP were retrieved successfully
 if [ -z "$WAN_INTERFACE" ] || [ -z "$WAN_IP" ]; then
     echo "Error: Could not retrieve WAN interface or IP. Exiting."
     exit 1
 fi
 
-DNS_SERVER="10.0.0.1"  # Optionally set a DNS server
+DNS_SERVER="10.0.0.1"
 
-# File with the list of client accounts
-ACCOUNTS_FILE="accounts.txt"
+# Recreate WireGuard configuration if the -r option is used
+if [ "$RECREATE" = true ]; then
+    echo "Recreating WireGuard configuration..."
+    run_command uci delete network.${VPN_INTERFACE}
+    SERVER_PRIVATE_KEY=$(wg genkey)
+    SERVER_PUBLIC_KEY=$(echo $SERVER_PRIVATE_KEY | wg pubkey)
 
-# Create a directory for client configurations
-mkdir -p client_configs
-
-# Generate keys for the WireGuard server (if not already generated)
-SERVER_PRIVATE_KEY=$(wg genkey)
-SERVER_PUBLIC_KEY=$(echo $SERVER_PRIVATE_KEY | wg pubkey)
-echo "Server private key: $SERVER_PRIVATE_KEY"
-echo "Server public key: $SERVER_PUBLIC_KEY"
-
-# Check if the WireGuard interface is already defined in UCI
-run_command uci show network.${VPN_INTERFACE}
-if [ $? -ne 0 ]; then
-    echo "Creating WireGuard interface $VPN_INTERFACE"
+    # Set up WireGuard server
     run_command uci set network.${VPN_INTERFACE}=interface
     run_command uci set network.${VPN_INTERFACE}.proto='wireguard'
     run_command uci set network.${VPN_INTERFACE}.private_key="$SERVER_PRIVATE_KEY"
     run_command uci set network.${VPN_INTERFACE}.listen_port="$VPN_PORT"
-    run_command uci set network.${VPN_INTERFACE}.addresses="$VPN_ADDRESS"
+    run_command uci set network.${VPN_INTERFACE}.addresses="10.0.0.1/24"
     run_command uci commit network
-else
-    echo "WireGuard interface $VPN_INTERFACE already exists. Skipping creation."
+
+    echo "WireGuard server recreated with new keys."
 fi
 
-# Restart network services
-echo "Restarting network services..."
-run_command /etc/init.d/network reload
-
-# Enable IP forwarding directly using sysctl
-echo "Enabling IPv4 and IPv6 forwarding"
+# Enable IP forwarding
 run_command sysctl -w net.ipv4.ip_forward=1
 run_command sysctl -w net.ipv6.conf.all.forwarding=1
 
-# Generate client configurations
-INDEX=1
-while read -r EMAIL; do
-    echo "Processing client $INDEX with email $EMAIL"
+# Add clients from the accounts file if provided
+if [ -n "$ACCOUNTS_FILE" ]; then
+    INDEX=1
+    while read -r EMAIL; do
+        if [ -z "$EMAIL" ]; then
+            continue
+        fi
 
-    # Generate private and public keys for the client
-    CLIENT_PRIVATE_KEY=$(wg genkey)
-    CLIENT_PUBLIC_KEY=$(echo $CLIENT_PRIVATE_KEY | wg pubkey)
-    echo "Client private key: $CLIENT_PRIVATE_KEY"
-    echo "Client public key: $CLIENT_PUBLIC_KEY"
+        echo "Processing client $INDEX with email $EMAIL"
 
-    # Assign an IP for each client
-    CLIENT_IP="10.0.0.$((INDEX + 1))/32"
-    echo "Client IP: $CLIENT_IP"
+        # Generate private and public keys for the client
+        CLIENT_PRIVATE_KEY=$(wg genkey)
+        CLIENT_PUBLIC_KEY=$(echo $CLIENT_PRIVATE_KEY | wg pubkey)
+        CLIENT_IP="10.0.0.$((INDEX + 1))/32"
 
-    # Create the client configuration file
-    cat << EOF > ./client_configs/client_${INDEX}.conf
+        # Check if the client already exists by checking both public key and description (email)
+        if uci show network | grep -q "$CLIENT_PUBLIC_KEY" || uci show network | grep -q "$EMAIL"; then
+            echo "Client $EMAIL with public key $CLIENT_PUBLIC_KEY already exists. Skipping."
+        else
+            # Create client configuration file
+            cat << EOF > ./client_configs/client_${INDEX}.conf
 [Interface]
 PrivateKey = $CLIENT_PRIVATE_KEY
 Address = $CLIENT_IP
@@ -95,26 +149,23 @@ Endpoint = $WAN_IP:$VPN_PORT
 PersistentKeepalive = 25
 EOF
 
-    # Check if the client has already been added to the WireGuard server
-    run_command uci show network | grep -q "$CLIENT_PUBLIC_KEY"
-    if [ $? -ne 0 ]; then
-        echo "Adding client $INDEX with public key $CLIENT_PUBLIC_KEY to WireGuard server"
-        PEER_ID=$(uci add network wireguard_${VPN_INTERFACE})
-        run_command uci set network.${PEER_ID}.public_key="$CLIENT_PUBLIC_KEY"
-        run_command uci set network.${PEER_ID}.allowed_ips="$CLIENT_IP"
-        run_command uci commit network
-    else
-        echo "Client $EMAIL with public key $CLIENT_PUBLIC_KEY already exists. Skipping."
-    fi
+            echo "Adding client $INDEX with public key $CLIENT_PUBLIC_KEY to WireGuard server"
+            PEER_ID=$(uci add network wireguard_${VPN_INTERFACE})
+            run_command uci set network.${PEER_ID}.public_key="$CLIENT_PUBLIC_KEY"
+            run_command uci set network.${PEER_ID}.allowed_ips="$CLIENT_IP"
+            run_command uci set network.${PEER_ID}.description="$EMAIL"
+            run_command uci commit network
+        fi
 
-    INDEX=$((INDEX + 1))
-done < "$ACCOUNTS_FILE"
+        INDEX=$((INDEX + 1))
+    done < "$ACCOUNTS_FILE"
+fi
 
 # Restart network configuration
 echo "Restarting network configuration..."
 run_command /etc/init.d/network reload
 
-# Configure firewall rules to allow VPN traffic (only if not already set)
+# Configure firewall rules if needed
 run_command uci show firewall | grep -q "Allow-WireGuard"
 if [ $? -ne 0 ]; then
     echo "Adding firewall rule for WireGuard"
@@ -129,9 +180,8 @@ else
     echo "Firewall rule for WireGuard already exists. Skipping."
 fi
 
-# Restart the firewall
+# Restart firewall
 echo "Restarting firewall..."
 run_command /etc/init.d/firewall reload
 
-echo "WireGuard server configured!"
-echo "Server public key: $SERVER_PUBLIC_KEY"
+echo "WireGuard clients added successfully!"

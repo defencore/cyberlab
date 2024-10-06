@@ -122,7 +122,6 @@ else
     uci set dropbear.@dropbear[0].Port='22'
     uci set dropbear.@dropbear[0].PasswordAuth='off'
     uci set dropbear.@dropbear[0].RootPasswordAuth='off'
-    uci set dropbear.@dropbear[0].RootLogin='0'
     uci commit dropbear
 
     # Disable ttylogin

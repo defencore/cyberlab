@@ -104,3 +104,27 @@ wireguard-ui -disable-login
 [http://127.0.0.1:5000](http://127.0.0.1:5000)
 
 ![image](https://github.com/user-attachments/assets/04c67fd1-b0cf-41f5-8c62-90b5e7462d11)
+
+---
+
+![image](https://github.com/user-attachments/assets/964f20c3-7035-479e-a6f4-d667916a34e9)
+
+Listen Port
+```
+51820
+```
+
+Post Up Script
+```
+iptables -A FORWARD -i %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+```
+
+Pre Down Script
+```
+iptables -D FORWARD -i %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+```
+
+Post Down Script
+```
+iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o enp1s0 -j MASQUERADE; ip6tables -A FORWARD -i wg0 -j ACCEPT; ip6tables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+```

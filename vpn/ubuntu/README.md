@@ -107,7 +107,7 @@ wireguard-ui -disable-login
 
 ---
 
-![image](https://github.com/user-attachments/assets/964f20c3-7035-479e-a6f4-d667916a34e9)
+![image](https://github.com/user-attachments/assets/0a405b23-6027-4681-bb92-cbf2584e6f58)
 
 Listen Port
 ```
@@ -126,7 +126,7 @@ iptables -D FORWARD -i %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j M
 
 Post Down Script
 ```
-iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o enp1s0 -j MASQUERADE; ip6tables -A FORWARD -i wg0 -j ACCEPT; ip6tables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eths0 -j MASQUERADE; ip6tables -A FORWARD -i wg0 -j ACCEPT; ip6tables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 ```
 
 ---

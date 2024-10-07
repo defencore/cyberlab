@@ -128,3 +128,8 @@ Post Down Script
 ```
 iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o enp1s0 -j MASQUERADE; ip6tables -A FORWARD -i wg0 -j ACCEPT; ip6tables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 ```
+
+---
+Add Wireguard Clients
+![image](https://github.com/user-attachments/assets/784f344c-02b5-4d30-90cc-b85bd9e5c17f)
+

@@ -296,3 +296,4 @@ Open your OpenWrt router IP in WEB-browser with 8081 port and use your creds fro
 **Now you can go to:**
 - [VPN Configuring](https://github.com/defencore/cyberlab/blob/main/labs/lab_openwrt_wireguard_vpn_client.md)
 - [SSH tunneling](https://github.com/defencore/cyberlab/blob/main/labs/lab_openwrt_ssh_tunnels.md)
+- [Linux Namespaces](https://github.com/defencore/cyberlab/blob/main/labs/lab_linux_namespaces.md)

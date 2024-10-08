@@ -18,38 +18,38 @@
 ## Step 3.
 **Bringing the Interface Up in the Namespace**:
    ```
-   sudo ip netns exec ns_micronet ip link set tap-9-2-lan up
+   sudo ip netns exec ns_mikronet ip link set tap-9-2-lan up
    ```
    - This brings up the `tap-9-2-lan` interface inside the `ns_mikronet` namespace.
 
 ## Step 4.
 **Running Network Tools in the Namespace**:
    ```
-   sudo ip netns exec ns_micronet netdiscover
+   sudo ip netns exec ns_mikronet netdiscover
    ```
    - This runs `netdiscover` inside the `ns_mikronet` namespace, which scans the local network for active hosts.
 
 ## Step 5.
 **Assigning an IP Address and Route**:
    ```
-   sudo ip netns exec ns_micronet ip addr add 192.168.88.2/24 dev tap-9-2-lan
-   sudo ip netns exec ns_micronet ip route add default via 192.168.88.1 dev tap-9-2-lan
+   sudo ip netns exec ns_mikronet ip addr add 192.168.88.2/24 dev tap-9-2-lan
+   sudo ip netns exec ns_mikronet ip route add default via 192.168.88.1 dev tap-9-2-lan
    ```
    - These commands assign the IP address `192.168.88.2/24` to the `tap-9-2-lan` interface in the `ns_mikronet` namespace and set the default gateway to `192.168.88.1` on the same interface.
 
 ## Step 6.
 **Testing the Network**:
    ```
-   sudo ip netns exec ns_micronet traceroute 8.8.8.8
+   sudo ip netns exec ns_mikronet traceroute 8.8.8.8
    ```
    - This command uses `traceroute` inside the `ns_mikronet` namespace to check connectivity to Google's DNS server `8.8.8.8`.
 
 ## Step 7.
 **Reverting the Configuration**:
    ```
-   sudo ip netns exec ns_micronet ip link set tap-9-2-lan netns 1
+   sudo ip netns exec ns_mikronet ip link set tap-9-2-lan netns 1
    # OR
-   sudo ip netns exec ns_micronet ip link del tap-9-2-lan
+   sudo ip netns exec ns_mikronet ip link del tap-9-2-lan
    ```
    - The first command moves the `tap-9-2-lan` interface back to the root namespace. The second alternative command deletes the `tap-9-2-lan` interface entirely.
 

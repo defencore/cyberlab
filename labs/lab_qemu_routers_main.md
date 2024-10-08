@@ -286,5 +286,5 @@ Open your OpenWrt router IP in WEB-browser with 8081 port and use your creds fro
 ## At this stage, the basic configuration of the routers is complete
 
 **Now you can go to:**
-- VPN Configuring
-- SSH tunneling
+- [VPN Configuring](https://github.com/defencore/cyberlab/blob/main/labs/lab_openwrt_wireguard_vpn_client.md)
+- [SSH tunneling](https://github.com/defencore/cyberlab/blob/main/labs/lab_openwrt_ssh_tunnels.md)

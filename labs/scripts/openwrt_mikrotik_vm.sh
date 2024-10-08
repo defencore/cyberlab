@@ -382,7 +382,7 @@ start_openwrt_vm() {
     fi
 
     # Start the VM in a detached screen session with QEMU
-    sudo screen -dmS "vm_${vm_id}-1-openwrt" \
+    sudo screen -dmS "vm-${vm_id}-1-openwrt" \
     qemu-system-x86_64 \
         -name "OpenWrt ${vm_id}" \
         -m 128M \
@@ -411,7 +411,7 @@ start_mikrotik_vm() {
     fi
 
     # Start the VM in a detached screen session with QEMU
-    sudo screen -dmS "vm_${vm_id}-2-mikrotik" \
+    sudo screen -dmS "vm-${vm_id}-2-mikrotik" \
     qemu-system-x86_64 \
         -name "MikroTik ${vm_id}" \
         -m 128M \
@@ -456,16 +456,16 @@ stop_vm() {
     local vm_id=$1
 
     # Stop OpenWrt VM if the screen session exists
-    if sudo screen -list | grep -q "vm_${vm_id}-1-openwrt"; then
-        sudo screen -S "vm_${vm_id}-1-openwrt" -X quit
+    if sudo screen -list | grep -q "vm-${vm_id}-1-openwrt"; then
+        sudo screen -S "vm-${vm_id}-1-openwrt" -X quit
         echo "Stopped OpenWrt VM session for VM ID ${vm_id}."
     else
         echo "No active OpenWrt VM session for VM ID ${vm_id}."
     fi
 
     # Stop MikroTik VM if the screen session exists
-    if sudo screen -list | grep -q "vm_${vm_id}-2-mikrotik"; then
-        sudo screen -S "vm_${vm_id}-2-mikrotik" -X quit
+    if sudo screen -list | grep -q "vm-${vm_id}-2-mikrotik"; then
+        sudo screen -S "vm-${vm_id}-2-mikrotik" -X quit
         echo "Stopped MikroTik VM session for VM ID ${vm_id}."
     else
         echo "No active MikroTik VM session for VM ID ${vm_id}."
@@ -508,13 +508,41 @@ check_service_status() {
     fi
 
     for vm_id in "${VM_IDS[@]}"; do
-        if sudo screen -list | grep -q "vm_${vm_id}"; then
+        if sudo screen -list | grep -q "vm-${vm_id}"; then
             echo "VM ${vm_id} is running."
         else
             echo "VM ${vm_id} is not running."
         fi
     done
 }
+
+list_and_connect_sessions() {
+    local sessions=()
+    local i=1
+
+    while IFS= read -r line; do
+        if [[ "$line" == *vm-* ]]; then
+            sessions+=("$line")
+            echo "$i) $line"
+            ((i++))
+        fi
+    done < <(sudo screen -list | grep "vm-")
+
+    if [ "${#sessions[@]}" -eq 0 ]; then
+        echo "No VM sessions available."
+        return
+    fi
+
+    read -p "Enter the number of the session to connect: " choice
+
+    if [[ "$choice" -gt 0 && "$choice" -le "${#sessions[@]}" ]]; then
+        local session_name=$(echo "${sessions[$((choice-1))]}" | awk '{print $1}')
+        sudo screen -r "$session_name"
+    else
+        echo "Invalid choice. Please try again."
+    fi
+}
+
 
 # Function to display help menu with description
 display_help() {
@@ -536,6 +564,8 @@ display_help() {
     echo "  4) Stop All VMs         - Stop all VMs in the defined range"
     echo "  5) Enable Internet      - Enable NAT and forwarding for the network"
     echo "  6) Disable Internet     - Disable NAT and forwarding for the network"
+    echo "  7) Check Service Status - Check the status of dnsmasq and running VMs"
+    echo "  8) List and Connect to Screen Sessions - List available screen sessions and connect to them"
     echo "  q) Stop & Quit          - Exit the script"
     echo ""
     echo "Examples:"
@@ -596,6 +626,8 @@ while true; do
     echo "5) Enable Internet"
     echo "6) Disable Internet"
     echo "7) Check Service Status"
+    echo "8) List and Connect to Screen Sessions"
+
     echo "q) Stop & Quit"
     echo "=========================="
     
@@ -609,6 +641,7 @@ while true; do
         5) internet_enable ;;
         6) internet_disable ;;
         7) check_service_status ;;
+        8) list_and_connect_sessions ;;
         q) echo "Exiting..."; quit; break ;;
         *) echo "Invalid option. Please try again." ;;
     esac

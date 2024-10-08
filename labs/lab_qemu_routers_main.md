@@ -286,6 +286,12 @@ Disable the default admin user for security, and create a new admin user.
 ```
 
 ### 1.5.6. Step
+Configuring NAT to access the internet: Enable Masquerading
+```
+/ip firewall nat add chain=srcnat out-interface=ether2 action=masquerade
+```
+
+### 1.5.7. Step
 Open your OpenWrt router IP in WEB-browser with 8081 port and use your creds from **1.5.5. Step**
 <br/>Example: [http://172.16.1.102:8081](http://172.16.1.102:8081)
 ![image](https://github.com/user-attachments/assets/9f7d2507-890e-4f7e-9408-cfffa5322ccc)

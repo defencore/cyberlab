@@ -245,12 +245,8 @@ Login to Mikrotik
 - Login: `admin`
 - Password: `empty` (leave empty)
 
-![image](https://github.com/user-attachments/assets/df6ed927-88fd-47b4-be19-87598af228c7)
+![image](https://github.com/user-attachments/assets/4c249bd6-f7bd-4694-a229-716c1ef80ce2)
 
-After pressing `Enter`, you will see the following line:
-```
-[admin@MikroTik] > 
-```
 
 ### 1.5.3. Step
 Configure Static IP, Route and DNS

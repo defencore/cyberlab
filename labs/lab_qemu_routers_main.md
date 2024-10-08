@@ -134,7 +134,7 @@ ssh-rsa AAAAB3NzxxxxxYOURPUBLICKEYxxxxxxxxxX5yVtSw== yourlogin@mail
 ### 1.4.6. Step
 Enable GatewayPorts
 ```
-uci set dropbear.@dropbear[0].GatewayPorts='1'
+uci set dropbear.@dropbear[0].GatewayPorts='on'
 uci commit dropbear
 /etc/init.d/dropbear restart
 ```

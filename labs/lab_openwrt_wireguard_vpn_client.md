@@ -87,6 +87,23 @@ After the WireGuard interface (`wg0`) is configured, apply additional settings t
    uci commit network
    /etc/init.d/network reload
    ```
+## 5. Check connection
+Run `wg show`
+```
+root@OpenWrt:/tmp# wg show
+interface: wg0
+  public key: +3XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXY=
+  private key: (hidden)
+  listening port: 43573
+
+peer: QXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXBM=
+  preshared key: (hidden)
+  endpoint: XX.XXX.XXX.XX:51820
+  allowed ips: 10.252.1.0/24
+  latest handshake: 2 minutes, 30 seconds ago
+  transfer: 24.63 KiB received, 17.37 KiB sent
+  persistent keepalive: every 15 seconds
+```
 
 ---
 ![image](https://github.com/user-attachments/assets/28c84bed-aa16-45d9-8cc4-9cb7b0cc8c94)

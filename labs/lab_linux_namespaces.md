@@ -11,7 +11,7 @@
 **Moving a Network Interface to the Namespace**:
    ```
    sudo ip link set tap-9-2-lan down
-   sudo ip link set tap-9-2-lan netns ns_micronet
+   sudo ip link set tap-9-2-lan netns ns_mikronet
    ```
    - These commands move the `tap-9-2-lan` network interface into the `ns_mikronet` namespace. The interface is brought down before the move, which is required, and can then be re-enabled in the namespace.
 

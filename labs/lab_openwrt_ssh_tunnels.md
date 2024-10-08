@@ -15,9 +15,6 @@ MIKROTIK_LAN_IP=192.168.88.1
 ### Local port forwarding: Forward traffic from localhost:8000 to Mikrotik's HTTP server (192.168.1.2:80) through OpenWrt (172.16.1.102)
 ```
 ssh root@172.16.1.102 -i ~/.ssh/id_rsa -L localhost:8000:192.168.1.2:80 -N
-```
-### Alternative local port forwarding: Forward traffic from localhost (no restriction) to Mikrotik's HTTP server via OpenWrt
-```
 ssh root@172.16.1.102 -i ~/.ssh/id_rsa -L 8000:192.168.1.2:80 -N
 ```
 
@@ -35,19 +32,13 @@ ssh root@172.16.1.102 -i ~/.ssh/id_rsa -L 172.16.1.1:8000:192.168.1.2:80 -N
 Open http://172.16.1.1:8000 to access Mikrotik's HTTP server</br>
 ![image](https://github.com/user-attachments/assets/59d5eada-eae9-4231-b785-717427f903e9)
 
-### Forward to localhost of the remote machine: Mikrotik is listening on localhost:80, forwarded to 8000 on the local machine
+### Forward to localhost of the remote machine: OpenWrt is listening on *:80, forwarded to 8000 on the local machine
 ```
 ssh root@172.16.1.102 -i ~/.ssh/id_rsa -L 8000:localhost:80 -N
-```
-### Forward from OpenWrt LAN IP to Mikrotik: Traffic from OpenWrt LAN IP forwarded to Mikrotik via OpenWrt
-```
 ssh root@172.16.1.102 -i ~/.ssh/id_rsa -L 8000:192.168.1.1:80 -N
-```
-### Forward from all interfaces on OpenWrt to Mikrotik: Makes the HTTP server available globally
-```
 ssh root@172.16.1.102 -i ~/.ssh/id_rsa -L 8000:0.0.0.0:80 -N
 ```
-Open http://127.0.0.1:8000 to access Mikrotik's HTTP server</br>
+Open http://127.0.0.1:8000 to access OpenWrt's HTTP server</br>
 ![image](https://github.com/user-attachments/assets/315cf897-f2dd-42b3-b817-97a45941d5b5)
 
 ---
@@ -55,9 +46,6 @@ Open http://127.0.0.1:8000 to access Mikrotik's HTTP server</br>
 ### Forward remote port 10000 on OpenWrt to an external server (145.24.145.107:80)
 ```
 ssh root@172.16.1.102 -i ~/.ssh/id_rsa -R 172.16.1.102:10000:145.24.145.107:80 -N
-```
-### Bind to all interfaces on OpenWrt: Forward traffic from OpenWrt to the external server
-```
 ssh root@172.16.1.102 -i ~/.ssh/id_rsa -R 0.0.0.0:10000:145.24.145.107:80 -N
 ```
 Open http://172.16.1.102:10000 to access the external server</br>

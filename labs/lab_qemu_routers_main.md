@@ -217,6 +217,14 @@ uci set firewall.@rule[-1].dest_port='443'
 uci set firewall.@rule[-1].proto='tcp'
 uci set firewall.@rule[-1].target='ACCEPT'
 
+# Allow TEST access (port 10000) from WAN
+uci add firewall rule
+uci set firewall.@rule[-1].name='Allow-TEST-WAN'
+uci set firewall.@rule[-1].src='wan'
+uci set firewall.@rule[-1].dest_port='10000'
+uci set firewall.@rule[-1].proto='tcp'
+uci set firewall.@rule[-1].target='ACCEPT'
+
 # Save the firewall changes and restart the firewall
 uci commit firewall
 /etc/init.d/firewall restart

@@ -11,7 +11,7 @@ MIKROTIK_QCOW2_IMAGE="mikrotik-${MIKROTIK_VERSION}.qcow2"
 WAN_BRIDGE="br-wan"
 BR_WAN_IP="172.16.1.1/24"
 
-VM_IDS=( {9..10} )
+VM_IDS=( {9..24} )
 VM_DIR="vms"
 
 # Exit script on any error
@@ -36,7 +36,6 @@ print_system_info() {
 }
 
 init_script() {
-
     # Extract the base IP address without the subnet mask
     local BASE_IP=$(echo "$BR_WAN_IP" | cut -d'/' -f1)
     
@@ -189,30 +188,6 @@ deploy_systems() {
     echo "Deploying systems..."
     deploy_openwrt
     deploy_mikrotik
-}
-
-# Function to create bridges if they don't already exist
-create_bridge() {
-    local bridge_name=$1
-    if ! ip link show "$bridge_name" &> /dev/null; then
-        echo "Creating bridge $bridge_name..."
-        sudo brctl addbr "$bridge_name"
-        sudo ip link set dev "$bridge_name" up
-    else
-        echo "Bridge $bridge_name already exists."
-    fi
-}
-
-# Function to create TAP interfaces
-create_tap_interface() {
-    local tap_if=$1
-    if ! ip link show "$tap_if" &> /dev/null; then
-        echo "Creating TAP interface $tap_if..."
-        sudo ip tuntap add dev "$tap_if" mode tap
-        sudo ip link set "$tap_if" up
-    else
-        echo "TAP interface $tap_if already exists."
-    fi
 }
 
 # Helper function to delete a specified interface if it exists
@@ -432,6 +407,7 @@ display_help() {
     echo ""
     echo "Options:"
     echo "  -d      Enable Debug mode (prints additional debug information)"
+    echo "  -w      Enable Writable mode (allows changes to disk)"
     echo "  -h      Display this help message"
     echo ""
     echo "Menu Options:"
@@ -447,6 +423,7 @@ display_help() {
     echo "Examples:"
     echo "  $0 -h           # Display help"
     echo "  $0 -d           # Enable debug mode"
+    echo "  $0 -w           # Enable writable mode"
     echo "  $0              # Start the interactive menu"
 }
 
@@ -460,11 +437,14 @@ quit() {
     delete_if_exists "${WAN_BRIDGE}"
 }
 
-while getopts "dh" opt; do
+while getopts "dwh" opt; do
     case $opt in
         d)
             DEBUG_MODE=1
             print_system_info
+            ;;
+        w)
+            WRITABLE=1
             ;;
         h)
             display_help

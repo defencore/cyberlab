@@ -95,7 +95,7 @@ sudo iptables-save
 
 #### Forward port
 ```
-ssh $SSH_USER@$WIREGUARD_SERVER -i $SSH_KEY -L 5000:0.0.0.0:5000
+ssh $SSH_USER@$WIREGUARD_SERVER -i $SSH_KEY -L 5000:localhost:5000
 # run wireguard-ui
 wireguard-ui -disable-login
 ```

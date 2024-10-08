@@ -11,7 +11,7 @@ MIKROTIK_QCOW2_IMAGE="mikrotik-${MIKROTIK_VERSION}.qcow2"
 WAN_BRIDGE="br-wan"
 BR_WAN_IP="172.16.1.1/24"
 
-VM_IDS=( {9..24} )
+VM_IDS=( {9..10} )
 VM_DIR="vms"
 
 # Exit script on any error
@@ -36,6 +36,7 @@ print_system_info() {
 }
 
 init_script() {
+
     # Extract the base IP address without the subnet mask
     local BASE_IP=$(echo "$BR_WAN_IP" | cut -d'/' -f1)
     
@@ -68,6 +69,7 @@ init_script() {
         sudo brctl addbr "$WAN_BRIDGE"
         sudo ip link set dev "$WAN_BRIDGE" up
         sudo ip addr add "$BR_WAN_IP" dev "$WAN_BRIDGE"
+
     fi
 
     # Kill any running dnsmasq processes that are bound to the interface or IP
@@ -190,6 +192,89 @@ deploy_systems() {
     deploy_mikrotik
 }
 
+# Function to create bridges if they don't already exist
+create_bridge() {
+    local bridge_name=$1
+    if ! ip link show "$bridge_name" &> /dev/null; then
+        echo "Creating bridge $bridge_name..."
+        sudo brctl addbr "$bridge_name"
+        sudo ip link set dev "$bridge_name" up
+    else
+        echo "Bridge $bridge_name already exists."
+    fi
+}
+
+# Function to create TAP interfaces
+create_tap_interface() {
+    local tap_if=$1
+    if ! ip link show "$tap_if" &> /dev/null; then
+        echo "Creating TAP interface $tap_if..."
+        sudo ip tuntap add dev "$tap_if" mode tap
+        sudo ip link set "$tap_if" up
+    else
+        echo "TAP interface $tap_if already exists."
+    fi
+}
+
+# Function to check if vm_id is valid and within VM_IDS
+is_valid_vm_id() {
+    local vm_id=$1
+    for id in "${VM_IDS[@]}"; do
+        if [[ "$id" -eq "$vm_id" ]]; then
+            return 0  # vm_id is valid
+        fi
+    done
+    return 1  # vm_id is not valid
+}
+
+create_interfaces() {
+    local vm_id=$1
+    if is_valid_vm_id "$vm_id"; then
+
+        echo "Creating interfaces for VM $vm_id..."
+
+        # Create network bridges if they don't already exist
+        debug "Creating network bridge br-net-${vm_id}"
+        create_bridge "br-net-${vm_id}"
+        debug "Creating network bridge br-lan-${vm_id}"
+        create_bridge "br-lan-${vm_id}"
+
+        # Create TAP interfaces
+        debug "Creating TAP interfaces for VM $vm_id"
+        create_tap_interface "tap-${vm_id}-1-wan"
+        create_tap_interface "tap-${vm_id}-1-lan"
+        create_tap_interface "tap-${vm_id}-2-wan"
+        create_tap_interface "tap-${vm_id}-2-lan"
+
+        # Add TAP interfaces to bridges only if not already added
+        if ! brctl show "$WAN_BRIDGE" | grep -q "tap-${vm_id}-1-wan"; then
+            sudo brctl addif $WAN_BRIDGE "tap-${vm_id}-1-wan"
+        else
+            echo "TAP interface tap-${vm_id}-1-wan is already a member of $WAN_BRIDGE."
+        fi
+        
+        if ! brctl show "br-net-${vm_id}" | grep -q "tap-${vm_id}-1-lan"; then
+            sudo brctl addif "br-net-${vm_id}" "tap-${vm_id}-1-lan"
+        else
+            echo "TAP interface tap-${vm_id}-1-lan is already a member of br-net-${vm_id}."
+        fi
+
+        if ! brctl show "br-net-${vm_id}" | grep -q "tap-${vm_id}-2-wan"; then
+            sudo brctl addif "br-net-${vm_id}" "tap-${vm_id}-2-wan"
+        else
+            echo "TAP interface tap-${vm_id}-2-wan is already a member of br-net-${vm_id}."
+        fi
+
+        if ! brctl show "br-lan-${vm_id}" | grep -q "tap-${vm_id}-2-lan"; then
+            sudo brctl addif "br-lan-${vm_id}" "tap-${vm_id}-2-lan"
+        else
+            echo "TAP interface tap-${vm_id}-2-lan is already a member of br-lan-${vm_id}."
+        fi
+    else
+        echo "Invalid VM ID: $vm_id. It must be within the range of ${VM_IDS[@]}."
+    fi
+}
+
 # Helper function to delete a specified interface if it exists
 delete_if_exists() {
     local iface_name=$1
@@ -215,6 +300,7 @@ delete_interfaces() {
     # Delete network bridges
     delete_if_exists "br-net-${vm_id}"
     delete_if_exists "br-lan-${vm_id}"
+
 }
 
 # Function to delete all interfaces for all VMs
@@ -224,9 +310,25 @@ delete_all_interfaces() {
     done
 }
 
+# Function to detect the active Internet interface if it's not provided as an argument
+detect_active_interface() {
+    ACTIVE_IF=$(ip route | grep default | awk '{print $5}' | head -n 1)
+    if [ -z "$ACTIVE_IF" ]; then
+        echo "Error: Could not determine the active Internet interface."
+        exit 1
+    fi
+    echo "Detected active interface: $ACTIVE_IF"
+}
+
 # Function to enable internet access
 internet_enable() {
     echo "Enabling internet..."
+    # Add actual internet enable commands here
+     # Detect the active interface if it wasn't provided
+    if [ -z "$ACTIVE_IF" ]; then
+        detect_active_interface
+    fi
+    # Set up NAT for traffic going out through the active interface
     sudo iptables -t nat -A POSTROUTING -o "$ACTIVE_IF" -j MASQUERADE
     sudo iptables -I FORWARD -m physdev --physdev-is-bridged -j ACCEPT
     sudo sysctl -w net.ipv4.ip_forward=1
@@ -242,16 +344,25 @@ internet_enable() {
 internet_disable() {
     echo "Disabling internet..."
 
+    # Check and remove iptables POSTROUTING rule if it exists
     if sudo iptables -t nat -C POSTROUTING -o "$ACTIVE_IF" -j MASQUERADE 2>/dev/null; then
         sudo iptables -t nat -D POSTROUTING -o "$ACTIVE_IF" -j MASQUERADE
+    else
+        echo "No matching POSTROUTING rule found in the NAT table."
     fi
 
+    # Check and remove FORWARD rule (WAN_BRIDGE -> ACTIVE_IF) if it exists
     if sudo iptables -C FORWARD -i "$WAN_BRIDGE" -o "$ACTIVE_IF" -j ACCEPT 2>/dev/null; then
         sudo iptables -D FORWARD -i "$WAN_BRIDGE" -o "$ACTIVE_IF" -j ACCEPT
+    else
+        echo "No matching FORWARD rule (WAN_BRIDGE -> ACTIVE_IF) found."
     fi
 
+    # Check and remove FORWARD rule (ACTIVE_IF -> WAN_BRIDGE) if it exists
     if sudo iptables -C FORWARD -i "$ACTIVE_IF" -o "$WAN_BRIDGE" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null; then
         sudo iptables -D FORWARD -i "$ACTIVE_IF" -o "$WAN_BRIDGE" -m state --state RELATED,ESTABLISHED -j ACCEPT
+    else
+        echo "No matching FORWARD rule (ACTIVE_IF -> WAN_BRIDGE) found."
     fi
 }
 
@@ -292,12 +403,14 @@ start_mikrotik_vm() {
     
     echo "Starting MikroTik VM ${vm_id}..."
     
+    # Copy template image if VM-specific image doesn't exist
     if [ ! -f "$vm_image" ]; then
         cp "${MIKROTIK_QCOW2_IMAGE}" "$vm_image"
     else
         echo "VM image for VM ${vm_id} MikroTik already exists."
     fi
 
+    # Start the VM in a detached screen session with QEMU
     sudo screen -dmS "vm_${vm_id}-2-mikrotik" \
     qemu-system-x86_64 \
         -name "MikroTik ${vm_id}" \
@@ -315,6 +428,7 @@ start_mikrotik_vm() {
 # Helper function to start both OpenWrt and MikroTik VMs for a specific VM ID
 start_vm() {
     local vm_id=$1
+    create_interfaces "$vm_id"
     start_openwrt_vm "$vm_id"
     start_mikrotik_vm "$vm_id"
 }
@@ -341,6 +455,7 @@ start_all_qemu_machines() {
 stop_vm() {
     local vm_id=$1
 
+    # Stop OpenWrt VM if the screen session exists
     if sudo screen -list | grep -q "vm_${vm_id}-1-openwrt"; then
         sudo screen -S "vm_${vm_id}-1-openwrt" -X quit
         echo "Stopped OpenWrt VM session for VM ID ${vm_id}."
@@ -348,6 +463,7 @@ stop_vm() {
         echo "No active OpenWrt VM session for VM ID ${vm_id}."
     fi
 
+    # Stop MikroTik VM if the screen session exists
     if sudo screen -list | grep -q "vm_${vm_id}-2-mikrotik"; then
         sudo screen -S "vm_${vm_id}-2-mikrotik" -X quit
         echo "Stopped MikroTik VM session for VM ID ${vm_id}."
@@ -355,6 +471,7 @@ stop_vm() {
         echo "No active MikroTik VM session for VM ID ${vm_id}."
     fi
 
+    # Delete network interfaces
     delete_interfaces "$vm_id"
 }
 
@@ -378,6 +495,7 @@ stop_all_qemu_machines() {
         stop_vm "$vm_id"
     done
 
+    # Delete all network interfaces and disable internet
     delete_all_interfaces
     internet_disable
 }
@@ -407,7 +525,7 @@ display_help() {
     echo ""
     echo "Options:"
     echo "  -d      Enable Debug mode (prints additional debug information)"
-    echo "  -w      Enable Writable mode (allows changes to disk)"
+    echo "  -w      Set WRITABLE to 1 (allows changes to disk)"
     echo "  -h      Display this help message"
     echo ""
     echo "Menu Options:"
@@ -418,7 +536,7 @@ display_help() {
     echo "  4) Stop All VMs         - Stop all VMs in the defined range"
     echo "  5) Enable Internet      - Enable NAT and forwarding for the network"
     echo "  6) Disable Internet     - Disable NAT and forwarding for the network"
-    echo "  q) Quit                 - Exit the script"
+    echo "  q) Stop & Quit          - Exit the script"
     echo ""
     echo "Examples:"
     echo "  $0 -h           # Display help"
@@ -428,6 +546,7 @@ display_help() {
 }
 
 quit() {
+    stop_all_qemu_machines
     if sudo screen -list | grep -q "dnsmasq"; then
         sudo screen -S "dnsmasq" -X quit
         echo "Stopped dnsmasq"
@@ -465,6 +584,7 @@ mkdir -p "${VM_DIR}"
 
 # Menu loop
 while true; do
+    #clear
     echo "=========================="
     echo "Menu:"
     echo "=========================="
@@ -476,7 +596,7 @@ while true; do
     echo "5) Enable Internet"
     echo "6) Disable Internet"
     echo "7) Check Service Status"
-    echo "q) Quit"
+    echo "q) Stop & Quit"
     echo "=========================="
     
     read -p "Enter your choice: " choice
